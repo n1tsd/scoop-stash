@@ -32,5 +32,6 @@ jobs:
             echo "no artifact changes"
           else
             git commit -m "build(recshim): rebuild artifacts [skip ci]"
+            git pull --rebase origin main
             git push
           fi
