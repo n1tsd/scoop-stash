@@ -1,0 +1,36 @@
+name: Build recshim
+
+on:
+  push:
+    paths: ['shim/**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install zig 0.16.0
+        run: |
+          curl -fsSL https://ziglang.org/download/0.16.0/zig-x86_64-linux-0.16.0.tar.xz -o /tmp/zig.tar.xz
+          tar -xf /tmp/zig.tar.xz -C "$HOME"
+          echo "$HOME/zig-x86_64-linux-0.16.0" >> "$GITHUB_PATH"
+
+      - name: Build
+        run: pwsh shim/build.ps1
+
+      - name: Commit artifacts
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/
+          if git diff --cached --quiet; then
+            echo "no artifact changes"
+          else
+            git commit -m "build(recshim): rebuild artifacts [skip ci]"
+            git push
+          fi
