@@ -1,5 +1,5 @@
 {
-    "version": "0.2.0",
+    "version": "0.2.0-20260818-d3adc7e",
     "description": "Cursor2API (API for Cursor) - Tauri desktop gateway for Cursor tools, weekly self-built Windows port",
     "homepage": "https://github.com/NGLSG/Cursor2API",
     "license": "MIT",
@@ -10,7 +10,7 @@
     ],
     "architecture": {
         "64bit": {
-            "url": "https://github.com/n1tsd/scoop-stash/releases/download/cursor2api-v0.2.0/cursor2api-0.2.0-windows-x64.zip",
+            "url": "https://github.com/n1tsd/scoop-stash/releases/download/cursor2api-v0.2.0-20260818-d3adc7e/cursor2api-0.2.0-20260818-d3adc7e-windows-x64.zip",
             "hash": "7906d73bb683821cf663ee44fb4c886c140ba84af9764a017d8c3af303f27277"
         }
     },
