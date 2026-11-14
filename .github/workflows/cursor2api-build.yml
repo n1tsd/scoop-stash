@@ -153,25 +153,24 @@ jobs:
             Select-Object -First 1 -ExpandProperty FullName
           Write-Host "Installer: $nsis"
           $out = Join-Path $env:RUNNER_TEMP 'c2a'
+          if (Test-Path $out) { Remove-Item $out -Recurse -Force }
           New-Item -ItemType Directory -Force $out | Out-Null
           # 7-Zip ships on windows runners; extract payload first (ah = archive header)
           7z x $nsis "-o$out" -y | Out-Null
-          Get-ChildItem $out
-          $app = Join-Path $out '$PLUGINSDIR'
-          if (Test-Path (Join-Path $app 'app-64.7z')) {
-            $payload = Join-Path $out 'payload'
-            7z x (Join-Path $app 'app-64.7z') "-o$payload" -y | Out-Null
-            $root = $payload
-          } else {
-            # Some NSIS layouts unpack straight into $INSTDIR; find the dir
-            # holding the main exe (sidecar next to it, resources nearby).
-            $root = (Get-ChildItem $out -Recurse -Filter '*.exe' |
-              Where-Object { $_.Name -notmatch '^(uninst|.*-install)' } |
-              Select-Object -First 1).DirectoryName
-          }
+          # app root = directory containing the sidecar next to the main exe
+          $root = (Get-ChildItem $out -Recurse -Filter 'api-for-cursor-server.exe' |
+            Select-Object -First 1).DirectoryName
+          if (-not $root) { throw 'sidecar api-for-cursor-server.exe not found in NSIS payload' }
           Write-Host "Payload root: $root"
+          $stage = Join-Path $env:RUNNER_TEMP 'c2a-stage'
+          if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
+          New-Item -ItemType Directory -Force $stage | Out-Null
+          # copy payload minus NSIS scaffolding: uninstall.exe and $PLUGINSDIR
+          Get-ChildItem $root | Where-Object { $_.Name -ne 'uninstall.exe' } |
+            Copy-Item -Destination $stage -Recurse -Force
           $zip = Join-Path $env:RUNNER_TEMP "cursor2api-$env:VERSION-windows-x64.zip"
-          Compress-Archive -Path (Join-Path $root '*') -DestinationPath $zip
+          if (Test-Path $zip) { Remove-Item $zip -Force }
+          Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip
           Get-Item $zip | Select-Object FullName, Length
 
       - name: Create release

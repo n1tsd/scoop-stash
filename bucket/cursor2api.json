@@ -13,10 +13,10 @@
             "url": "https://github.com/n1tsd/scoop-stash/releases/download/cursor2api-v0.2.0/cursor2api-0.2.0-windows-x64.zip"
         }
     },
-    "bin": "API for Cursor.exe",
+    "bin": "api-for-cursor.exe",
     "shortcuts": [
         [
-            "API for Cursor.exe",
+            "api-for-cursor.exe",
             "Cursor2API"
         ]
     ],
