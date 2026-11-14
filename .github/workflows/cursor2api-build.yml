@@ -166,8 +166,11 @@ jobs:
           if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
           New-Item -ItemType Directory -Force $stage | Out-Null
           # copy payload minus NSIS scaffolding: uninstall.exe and $PLUGINSDIR
-          Get-ChildItem $root | Where-Object { $_.Name -ne 'uninstall.exe' } |
+          Get-ChildItem $root -Force | Where-Object { $_.Name -ne 'uninstall.exe' -and $_.Name -ne '$PLUGINSDIR' } |
             Copy-Item -Destination $stage -Recurse -Force
+          # sanity check: no scaffolding may remain
+          $leftover = Get-ChildItem $stage -Force | Where-Object { $_.Name -match 'PLUGINSDIR|uninstall' }
+          if ($leftover) { throw "NSIS scaffolding leaked into portable zip: $($leftover.Name -join ', ')" }
           $zip = Join-Path $env:RUNNER_TEMP "cursor2api-$env:VERSION-windows-x64.zip"
           if (Test-Path $zip) { Remove-Item $zip -Force }
           Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip
