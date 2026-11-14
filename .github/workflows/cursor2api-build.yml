@@ -113,10 +113,14 @@ jobs:
           cp "$(command -v node)" src-tauri/bridge/node.exe
           ls -la src-tauri/bridge
 
-      - name: Disable updater artifacts (no signing key)
+      - name: Disable updater signing (no private key)
         # Upstream ships createUpdaterArtifacts: true, which makes `tauri build`
-        # demand TAURI_SIGNING_PRIVATE_KEY. The portable scoop build needs no
-        # updater artifacts at all, so drop the flag before building.
+        # demand TAURI_SIGNING_PRIVATE_KEY to produce .sig updater files. The
+        # portable scoop build needs no updater artifacts. Keep the
+        # plugins.updater config itself intact (deleting it panics the
+        # tauri-plugin-updater Rust code at startup - the plugin is a compiled
+        # dependency) and only drop the artifact generation; an empty dummy key
+        # then satisfies the bundler without producing usable signatures.
         if: steps.exists.outputs.exists != 'true'
         working-directory: desktop
         shell: bash
@@ -127,7 +131,6 @@ jobs:
             const p = 'src-tauri/tauri.conf.json';
             const c = JSON.parse(fs.readFileSync(p, 'utf8'));
             c.bundle.createUpdaterArtifacts = false;
-            delete c.plugins.updater;
             fs.writeFileSync(p, JSON.stringify(c, null, 2));
           "
 
