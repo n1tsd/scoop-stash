@@ -14,6 +14,7 @@ scoop install stash/<app>
 | 应用 | 说明 |
 | --- | --- |
 | [reclaude](bucket/reclaude.json) | ReClaude CLI 启动器（Claude Code / Codex），提供 `reclaude` / `rec` / `recodex` / `recx` 四个原生命令入口；入口处拦截 `update` / `setup` / `uninstall`，防止绕过 scoop |
+| [cursor2api](bucket/cursor2api.json) | [NGLSG/Cursor2API](https://github.com/NGLSG/Cursor2API) 的 Windows 桌面版（Tauri）。上游无 Windows 发布，由本仓库 Actions 每周一拉取 master 自行编译便携版发 Release |
 
 ## 目录结构
 
@@ -24,6 +25,7 @@ assets/                  # GitHub Actions 云端编译产物（recshim-*.exe）
 .github/workflows/
     excavator.yml        # 每日自动检查 manifest 更新
     build-shim.yml       # shim 源码变更时自动重建 assets
+    cursor2api-build.yml # 每周拉取上游 Cursor2API master 编译 Windows 版并发布 Release
 ```
 
 ## 自动更新

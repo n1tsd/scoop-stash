@@ -1,0 +1,178 @@
+name: Build Cursor2API (Windows)
+
+# The upstream NGLSG/Cursor2API repo publishes no Windows releases, so this
+# workflow pulls its master branch weekly, builds the Tauri 2 desktop app
+# with the same steps as upstream .github/workflows/release-windows.yml
+# (minus signing/publishing), and ships a portable zip to this repo's
+# Releases. The scoop manifest tracks those releases.
+
+on:
+  schedule:
+    # every Monday 04:00 UTC (12:00 Beijing time)
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  UPSTREAM_REPO: NGLSG/Cursor2API
+  UPSTREAM_BRANCH: master
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Check out upstream
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.UPSTREAM_REPO }}
+          ref: ${{ env.UPSTREAM_BRANCH }}
+          fetch-depth: 0
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          commit="$(git rev-parse --short HEAD)"
+          commit_date="$(git log -1 --format=%cd --date=format:%Y%m%d)"
+          appver="$(node -p "require('./desktop/src-tauri/tauri.conf.json').version")"
+          version="$appver-$commit_date-$commit"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: $version"
+
+      - name: Skip if release already exists
+        id: exists
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if gh release view "cursor2api-v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Release cursor2api-v$VERSION already exists; nothing to do."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Node
+        if: steps.exists.outputs.exists != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up Rust toolchain
+        if: steps.exists.outputs.exists != 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Rust build
+        if: steps.exists.outputs.exists != 'true'
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+
+      - name: Set up Bun
+        if: steps.exists.outputs.exists != 'true'
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        if: steps.exists.outputs.exists != 'true'
+        working-directory: desktop
+        run: bun install
+
+      - name: Generate app icons
+        if: steps.exists.outputs.exists != 'true'
+        working-directory: desktop
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f "app-icon.png" ]; then
+            bunx tauri icon app-icon.png
+          elif [ -f "src-tauri/icons/icon.png" ]; then
+            bunx tauri icon src-tauri/icons/icon.png
+          else
+            echo "No source icon found; skipping icon generation."
+          fi
+
+      - name: Build sidecar binary
+        if: steps.exists.outputs.exists != 'true'
+        working-directory: desktop
+        run: bun build ../sidecar/server.ts --compile --outfile src-tauri/binaries/api-for-cursor-server-x86_64-pc-windows-msvc.exe
+
+      - name: Set up SDK bridge runtime
+        if: steps.exists.outputs.exists != 'true'
+        working-directory: desktop
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp ../scripts/cursor-sdk-local-agent-bridge.mjs src-tauri/bridge/cursor-sdk-local-agent-bridge.mjs
+          ( cd src-tauri/bridge && npm install --omit=dev )
+          cp "$(command -v node)" src-tauri/bridge/node.exe
+          ls -la src-tauri/bridge
+
+      - name: Build Tauri app (NSIS)
+        if: steps.exists.outputs.exists != 'true'
+        working-directory: desktop
+        run: bun run tauri build --target x86_64-pc-windows-msvc
+
+      - name: Package portable zip
+        if: steps.exists.outputs.exists != 'true'
+        working-directory: desktop
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # NSIS installer is perMachine; extract its payload instead of
+          # repacking, so scoop gets the exact files the upstream installer ships.
+          $nsis = Get-ChildItem 'src-tauri\target\x86_64-pc-windows-msvc\release\bundle\nsis' -Filter '*.exe' |
+            Select-Object -First 1 -ExpandProperty FullName
+          Write-Host "Installer: $nsis"
+          $out = Join-Path $env:RUNNER_TEMP 'c2a'
+          New-Item -ItemType Directory -Force $out | Out-Null
+          # 7-Zip ships on windows runners; extract payload first (ah = archive header)
+          7z x $nsis "-o$out" -y | Out-Null
+          Get-ChildItem $out
+          $app = Join-Path $out '$PLUGINSDIR'
+          if (Test-Path (Join-Path $app 'app-64.7z')) {
+            $payload = Join-Path $out 'payload'
+            7z x (Join-Path $app 'app-64.7z') "-o$payload" -y | Out-Null
+            $root = $payload
+          } else {
+            # Some NSIS layouts unpack straight into $INSTDIR; find the dir
+            # holding the main exe (sidecar next to it, resources nearby).
+            $root = (Get-ChildItem $out -Recurse -Filter '*.exe' |
+              Where-Object { $_.Name -notmatch '^(uninst|.*-install)' } |
+              Select-Object -First 1).DirectoryName
+          }
+          Write-Host "Payload root: $root"
+          $zip = Join-Path $env:RUNNER_TEMP "cursor2api-$env:VERSION-windows-x64.zip"
+          Compress-Archive -Path (Join-Path $root '*') -DestinationPath $zip
+          Get-Item $zip | Select-Object FullName, Length
+
+      - name: Create release
+        if: steps.exists.outputs.exists != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          COMMIT: ${{ steps.version.outputs.commit }}
+        run: |
+          set -euo pipefail
+          zip="$RUNNER_TEMP/cursor2api-$VERSION-windows-x64.zip"
+          gh release create "cursor2api-v$VERSION" "$zip" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Cursor2API $VERSION (Windows x64)" \
+            --notes "Automated weekly build of [${UPSTREAM_REPO}](https://github.com/$UPSTREAM_REPO) @ $COMMIT (branch $UPSTREAM_BRANCH). Windows Tauri app packaged portable for scoop."
+
+      - name: Trigger excavator manifest refresh
+        if: steps.exists.outputs.exists != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run excavator.yml --repo "$GITHUB_REPOSITORY" --ref main ||
+            echo "excavator trigger failed; it will pick changes up on its next scheduled run"
