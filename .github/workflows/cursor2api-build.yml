@@ -113,14 +113,16 @@ jobs:
           cp "$(command -v node)" src-tauri/bridge/node.exe
           ls -la src-tauri/bridge
 
-      - name: Disable updater signing (no private key)
-        # Upstream ships createUpdaterArtifacts: true, which makes `tauri build`
-        # demand TAURI_SIGNING_PRIVATE_KEY to produce .sig updater files. The
-        # portable scoop build needs no updater artifacts. Keep the
-        # plugins.updater config itself intact (deleting it panics the
-        # tauri-plugin-updater Rust code at startup - the plugin is a compiled
-        # dependency) and only drop the artifact generation; an empty dummy key
-        # then satisfies the bundler without producing usable signatures.
+      - name: Patch config for portable scoop build
+        # Two tweaks, both required for a portable scoop build with no secrets:
+        # 1. createUpdaterArtifacts -> false: upstream ships it true, which makes
+        #    `tauri build` demand TAURI_SIGNING_PRIVATE_KEY. plugins.updater
+        #    itself MUST stay (compiled-in plugin panics at startup without it).
+        # 2. remove the trayIcon config block: in Tauri 2 a config trayIcon
+        #    creates a tray icon automatically, and main.rs additionally builds
+        #    one via TrayIconBuilder (upstream bug, tauri#8982) - two tray icons
+        #    show up. Dropping the config block keeps the code-built one, which
+        #    is the only one wired to the menu and click events.
         if: steps.exists.outputs.exists != 'true'
         working-directory: desktop
         shell: bash
@@ -131,6 +133,7 @@ jobs:
             const p = 'src-tauri/tauri.conf.json';
             const c = JSON.parse(fs.readFileSync(p, 'utf8'));
             c.bundle.createUpdaterArtifacts = false;
+            delete c.app.trayIcon;
             fs.writeFileSync(p, JSON.stringify(c, null, 2));
           "
 
