@@ -11,7 +11,7 @@
     "architecture": {
         "64bit": {
             "url": "https://github.com/n1tsd/scoop-stash/releases/download/cursor2api-v0.2.0-20260818-d3adc7e/cursor2api-0.2.0-20260818-d3adc7e-windows-x64.zip",
-            "hash": "7906d73bb683821cf663ee44fb4c886c140ba84af9764a017d8c3af303f27277"
+            "hash": "51c9ce6f6485cde8ec828f68adbf5a69fb09596a09d06a2bcfdfe2b392ce3030"
         }
     },
     "bin": "api-for-cursor.exe",
